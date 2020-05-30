@@ -1,22 +1,35 @@
-// we need a template render here
-// xss, helper, include
 
-const usr = {
-    name: "<script />"
-}
+const koa = require('koa')
+const fs = require('fs')
+const mount = require('koa-mount')
+const static = require('koa-static')
+const rpcClient = require('./client')
+const template = require('./template');
 
-const vm = require('vm')
-
-console.log(vm.runInNewContext('`<h2>${helper(usr.name)}</h2>`', {
-    usr,
-    helper: function() {},
-    _:function(markup) {
-        if (!markup) return ''
-        return String(markup).replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/'/g, '&#39')
-        .replace(/"/g, '&quot')
+const app = new koa()
+const detailTemplate = template(__dirname + '/template/index.html')
+app.use(
+    mount('/static', static(`${__dirname}/source/static`))
+    // static(__dirname+'/source')
+)
+app.use(async (ctx) => {
+    if (!ctx.query.columnid) {
+        ctx.status = 400
+        ctx.body = 'invalid columnid'
+        return
     }
-}))
 
+    const result = await new Promise((resolve, reject) => {
+        rpcClient.write({
+            columnid: ctx.query.columnid
+        }, function (err, data) {
+            err ? reject(err) : resolve(data)
+        })
+    })
+
+    ctx.status = 200
+
+    ctx.body = detailTemplate(result)
+})
+
+app.listen(3000)
